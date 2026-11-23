@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Playground — Groq LPU & Prompt Lab</title>
+  <!-- Three.js & OrbitControls for 3D Visualization -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    :root {
+      --bg: #0b0d11;
+      --sidebar-bg: #0e1117;
+      --card-bg: #141722;
+      --card-inner: #191d2b;
+      --border: #232838;
+      --border-focus: #3b4259;
+      --text-main: #f0f3f8;
+      --text-muted: #8b94a5;
+      --groq-orange: #f55036;
+      --groq-orange-hover: #ff6347;
+      --groq-orange-subtle: rgba(245, 80, 54, 0.15);
+      --groq-cyan: #00e5ff;
+      --green: #22c55e;
+      --red: #ef4444;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: var(--sans);
+      font-size: 13px;
+      line-height: 1.5;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navigation Bar */
+    header.topbar {
+      height: 52px;
+      background: var(--sidebar-bg);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .top-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .groq-logo-flame {
+      color: var(--groq-orange);
+      font-size: 16px;
+    }
+    .model-selector-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+    .model-select {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+    .model-subtext {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .top-center-tabs {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+      margin-right: auto;
+      background: var(--card-inner);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .view-tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .view-tab-btn.active {
+      background: var(--card-bg);
+      color: var(--text-main);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .view-tab-btn:hover:not(.active) {
+      color: var(--text-main);
+    }
+    .top-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .live-status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--green);
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.3px;
+    }
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.9); }
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-outline:hover {
+      border-color: var(--border-focus);
+      background: var(--card-inner);
+    }
+
+    /* Main Container Grid (3 Columns) */
+    .app-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 310px 1fr 340px;
+      overflow: hidden;
+    }
+
+    /* Left Drawer: Parameters */
+    .left-panel {
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .param-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .param-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .param-val {
+      font-family: var(--mono);
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+    .param-input, .param-select {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      outline: none;
+      font-family: var(--mono);
+      width: 100%;
+    }
+    .param-input:focus, .param-select:focus {
+      border-color: var(--groq-orange);
+    }
+    .param-note {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .key-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .clear-btn {
+      background: none;
+      border: none;
+      color: var(--groq-orange);
+      font-size: 11px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      outline: none;
+      accent-color: var(--groq-orange);
+      cursor: pointer;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 32px;
+      height: 18px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--border);
+      transition: .2s;
+      border-radius: 20px;
+    }
+    .switch-slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 2px;
+      bottom: 2px;
+      background-color: var(--text-main);
+      transition: .2s;
+      border-radius: 50%;
+    }
+    input:checked + .switch-slider {
+      background-color: var(--groq-orange);
+    }
+    input:checked + .switch-slider:before {
+      transform: translateX(14px);
+    }
+
+    /* Center Panel: Prompt & Outputs */
+    .center-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+      position: relative;
+    }
+    .view-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .view-container.hidden { display: none !important; }
+
+    /* Main Editor / Chat View */
+    .editor-view {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 16px;
+      gap: 12px;
+    }
+    .response-card {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-y: auto;
+      font-family: var(--sans);
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: #e2e8f0;
+      position: relative;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .response-card.placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      text-align: center;
+      gap: 8px;
+    }
+    .response-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .search-alert-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 229, 255, 0.12);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      color: var(--groq-cyan);
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      margin-bottom: 10px;
+    }
+
+    .prompt-composer {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .prompt-composer:focus-within {
+      border-color: var(--border-focus);
+    }
+    .prompt-textarea {
+      width: 100%;
+      min-height: 130px;
+      max-height: 240px;
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.5;
+      resize: vertical;
+      outline: none;
+    }
+    .composer-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+    .shortcut-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .submit-btn {
+      background: var(--groq-orange);
+      color: #fff;
+      border: none;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 8px 22px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .submit-btn:hover {
+      background: var(--groq-orange-hover);
+    }
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* 3D Visualizer Canvas View */
+    .visualizer-view {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #06070a;
+    }
+    #threeCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .canvas-overlay-stats {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      background: rgba(14, 17, 23, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      border-radius: 8px;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .canvas-overlay-stats h4 {
+      font-size: 11px;
+      color: var(--groq-orange);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .canvas-overlay-stats p {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+
+    /* Code View */
+    .code-view {
+      padding: 16px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .code-tabs {
+      display: flex;
+      gap: 8px;
+    }
+    .code-tab-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .code-tab-btn.active {
+      background: var(--card-inner);
+      color: var(--text-main);
+      border-color: var(--groq-orange);
+    }
+    .code-box {
+      flex: 1;
+      background: #08090d;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      color: #cbd5e1;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.6;
+      overflow: auto;
+      white-space: pre;
+    }
+
+    /* Right Panel: Prompt Analysis & Speed */
+    .right-panel {
+      background: var(--sidebar-bg);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .analysis-header {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .analysis-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      margin-bottom: 10px;
+    }
+    .analysis-badge {
+      display: inline-block;
+      background: var(--groq-orange);
+      color: #fff;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .badge-explanation {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      margin-bottom: 14px;
+    }
+    .rule-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .rule-item {
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: var(--text-muted);
+    }
+    .rule-item.active {
+      color: #e2e8f0;
+    }
+    .rule-item .icon {
+      font-weight: 900;
+      margin-right: 4px;
+    }
+    .rule-item.active .icon {
+      color: var(--green);
+    }
+    .rule-item.inactive .icon {
+      color: #64748b;
+    }
+    .rule-highlight {
+      color: #cbd5e1;
+      font-weight: 600;
+    }
+    .rule-subtext {
+      font-size: 10.5px;
+      color: #71717a;
+      margin-left: 16px;
+      margin-top: 2px;
+    }
+
+    /* Speed & Telemetry Card */
+    .speed-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .speed-header {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .metric-box {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .metric-value {
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--groq-orange);
+    }
+    .metric-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.2;
+    }
+    .speed-footnote {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+
+    /* Code Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 90%;
+      max-width: 650px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h3 { font-size: 14px; font-weight: 700; }
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .modal-body {
+      padding: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="topbar">
+    <div class="top-left">
+      <div class="brand-title">
+        <span class="groq-logo-flame">⚡</span>
+        <span>LLM Playground</span>
+      </div>
+      <div class="model-selector-wrap">
+        <select id="modelSelect" class="model-select">
+          <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+          <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+          <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
+          <option value="gemma2-9b-it">gemma2-9b-it</option>
+          <option value="qwen/qwen3.8-27b">qwen/qwen3.8-27b</option>
+        </select>
+        <span class="model-subtext" id="modelSubtext">Fallback list — paste a key to load live models</span>
+      </div>
+    </div>
+
+    <!-- Center View Switcher Tabs -->
+    <div class="top-center-tabs">
+      <button class="view-tab-btn active" data-view="editor">
+        <span>✎</span> Prompt & Chat
+      </button>
+      <button class="view-tab-btn" data-view="visualizer">
+        <span>🌌</span> 3D Token Universe
+      </button>
+      <button class="view-tab-btn" data-view="code">
+        <span>&lt;/&gt;</span> View Code
+      </button>
+    </div>
+
+    <div class="top-right">
+      <div class="live-status-badge">
+        <div class="live-dot" id="liveDot"></div>
+        <span id="liveStatusText">LIVE — ready</span>
+      </div>
+      <button class="btn-outline" id="viewCodeModalBtn">View code</button>
+    </div>
+  </header>
+
+  <!-- App Body (3 Columns) -->
+  <div class="app-body">
+
+    <!-- Left Panel: Settings & Parameters -->
+    <aside class="left-panel">
+      <!-- Groq API Key -->
+      <div class="param-group">
+        <label class="param-label" for="apiKeyInput">Groq API key</label>
+        <input type="password" id="apiKeyInput" class="param-input" placeholder="gsk_..." autocomplete="off">
+        <div class="key-actions">
+          <label class="checkbox-label">
+            <input type="checkbox" id="rememberKeyCheck" checked> Remember key in this tab
+          </label>
+          <button class="clear-btn" id="clearKeyBtn">Clear key</button>
+        </div>
+        <p class="param-note">Your key stays in this browser and is sent nowhere except Groq.</p>
+      </div>
+
+      <!-- Temperature -->
+      <div class="param-group">
+        <div class="param-label">
+          <span>Temperature</span>
+          <span class="param-val" id="tempVal">0.7</span>
+        </div>
+        <div class="slider-row">
+          <input type="range" id="tempSlider" min="0" max="2" step="0.05" value="0.7">
+        </div>
+      </div>
+
+      <!-- Max Tokens -->
+      <div class="param-group">
+        <div class="param-label">
+          <span>Max tokens</span>
+          <span class="param-val" id="maxTokensVal">300</span>
+        </div>
+        <div class="slider-row">
+          <input type="range" id="maxTokensSlider" min="16" max="4096" step="16" value="300">
+        </div>
+        <p class="param-note">Free-tier accounts are capped on tokens per minute, so keep this small while exploring.</p>
+      </div>
+
+      <!-- Stop Sequences -->
+      <div class="param-group">
+        <label class="param-label" for="stopSequencesInput">Stop sequences</label>
+        <input type="text" id="stopSequencesInput" class="param-input" placeholder="e.g. Input:, ###">
+        <p class="param-note">Comma separated, at most 4. Only sent when not empty.</p>
+      </div>
+
+      <!-- Web Search Toggle -->
+      <div class="param-group">
+        <div class="toggle-row">
+          <span class="param-label">Web search</span>
+          <label class="switch">
+            <input type="checkbox" id="webSearchToggle">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        <p class="param-note" id="webSearchNote">Enables live web grounding via DuckDuckGo search context injection before inference.</p>
+      </div>
+
+      <!-- Reasoning Toggle -->
+      <div class="param-group">
+        <div class="toggle-row">
+          <span class="param-label">Reasoning</span>
+          <label class="switch">
+            <input type="checkbox" id="reasoningToggle">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        <p class="param-note">Requests detailed chain-of-thought tokens from supported reasoning models.</p>
+      </div>
+    </aside>
+
+    <!-- Center Canvas: Active View -->
+    <main class="center-panel">
+
+      <!-- View 1: Prompt & Chat Editor -->
+      <div class="view-container editor-view" id="editorView">
+        <div class="response-card placeholder" id="responseCard">
+          <div style="font-size: 26px; color: var(--groq-orange);">⚡</div>
+          <strong style="color: #cbd5e1; font-size: 14px;">Groq LPU Inference Playground</strong>
+          <p style="font-size: 12px; max-width: 380px;">Enter your prompt below and press Submit to experience 400+ tokens/sec ultra-fast generation.</p>
+        </div>
+
+        <div class="prompt-composer">
+          <textarea class="prompt-textarea" id="promptTextarea" placeholder="Write a prompt or few-shot examples...&#10;&#10;Input: The battery lasts all day, love it.&#10;Output: positive&#10;&#10;Input: Screen cracked after one week.&#10;Output: negative&#10;&#10;Input: The camera is decent for the price.&#10;Output:"></textarea>
+          <div class="composer-footer">
+            <span class="shortcut-hint">Ctrl+Enter (Windows/Linux) or Cmd+Enter (Mac) to submit · Esc to stop</span>
+            <button class="submit-btn" id="submitBtn">
+              <span>Submit</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- View 2: 3D Token Universe Visualizer -->
+      <div class="view-container visualizer-view hidden" id="visualizerView">
+        <canvas id="threeCanvas"></canvas>
+        <div class="canvas-overlay-stats">
+          <h4>3D Token Particle Space</h4>
+          <p>Generated Tokens: <span id="particleTokenCount" style="color: #fff;">0</span></p>
+          <p>Velocity: <span id="particleVelocity" style="color: var(--groq-orange);">0 tok/s</span></p>
+          <p style="font-size: 10px; opacity: 0.7;">Rotate: Left Click · Pan: Right Click · Zoom: Scroll</p>
+        </div>
+      </div>
+
+      <!-- View 3: Live Code Viewer -->
+      <div class="view-container code-view hidden" id="codeView">
+        <div class="code-tabs">
+          <button class="code-tab-btn active" data-lang="python">Python</button>
+          <button class="code-tab-btn" data-lang="js">JavaScript (Node/Browser)</button>
+          <button class="code-tab-btn" data-lang="curl">cURL</button>
+        </div>
+        <pre class="code-box" id="codeBoxContent"></pre>
+      </div>
+
+    </main>
+
+    <!-- Right Panel: Real-Time Prompt Analysis & Speed Metrics -->
+    <aside class="right-panel">
+      <!-- Top Section: Prompt Analysis -->
+      <div>
+        <div class="analysis-header">
+          <span>PROMPT ANALYSIS</span>
+        </div>
+        <div class="analysis-sub">Analysing the prompt box (updates as you type).</div>
+
+        <div class="analysis-badge" id="badgeDisplay">ZERO-SHOT</div>
+        <p class="badge-explanation" id="badgeExplanation">Example count = the largest count from any single rule (rules overlap, so they are never added up).</p>
+
+        <div class="rule-list" id="ruleList">
+          <!-- Dynamically populated via real-time regex analyzer -->
+        </div>
+      </div>
+
+      <!-- Bottom Section: Speed & Telemetry -->
+      <div class="speed-card">
+        <div class="speed-header">SPEED (LAST REPLY)</div>
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <span class="metric-value" id="ttftVal">—</span>
+            <span class="metric-label">ms to first answer token</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-value" id="totalSecVal">—</span>
+            <span class="metric-label">seconds total</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-value" id="tpsVal">—</span>
+            <span class="metric-label">tokens / second</span>
+          </div>
+        </div>
+        <p class="speed-footnote">Web search and thinking both delay the first token — that is what they cost you in time.</p>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- JavaScript Engine -->
+  <script>
+    (function () {
+      'use strict';
+
+      // DOM Elements
+      const apiKeyInput = document.getElementById('apiKeyInput');
+      const rememberKeyCheck = document.getElementById('rememberKeyCheck');
+      const clearKeyBtn = document.getElementById('clearKeyBtn');
+      const modelSelect = document.getElementById('modelSelect');
+      const modelSubtext = document.getElementById('modelSubtext');
+      const tempSlider = document.getElementById('tempSlider');
+      const tempVal = document.getElementById('tempVal');
+      const maxTokensSlider = document.getElementById('maxTokensSlider');
+      const maxTokensVal = document.getElementById('maxTokensVal');
+      const stopSequencesInput = document.getElementById('stopSequencesInput');
+      const webSearchToggle = document.getElementById('webSearchToggle');
+      const reasoningToggle = document.getElementById('reasoningToggle');
+      const promptTextarea = document.getElementById('promptTextarea');
+      const submitBtn = document.getElementById('submitBtn');
+      const responseCard = document.getElementById('responseCard');
+      const liveStatusText = document.getElementById('liveStatusText');
+
+      // Speed metrics
+      const ttftVal = document.getElementById('ttftVal');
+      const totalSecVal = document.getElementById('totalSecVal');
+      const tpsVal = document.getElementById('tpsVal');
+
+      // Analysis elements
+      const badgeDisplay = document.getElementById('badgeDisplay');
+      const ruleList = document.getElementById('ruleList');
+
+      // Code view
+      const codeBoxContent = document.getElementById('codeBoxContent');
+      let currentCodeLang = 'python';
+
+      // State
+      let isGenerating = false;
+      let abortController = null;
+
+      // API Key Persistence
+      const savedKey = localStorage.getItem('groq_api_key') || '';
+      if (savedKey) {
+        apiKeyInput.value = savedKey;
+        loadLiveModels(savedKey);
+      }
+
+      apiKeyInput.addEventListener('input', () => {
+        const key = apiKeyInput.value.trim();
+        if (rememberKeyCheck.checked && key) {
+          localStorage.setItem('groq_api_key', key);
+        }
+        if (key.startsWith('gsk_')) {
+          loadLiveModels(key);
+        }
+        updateCodeView();
+      });
+
+      clearKeyBtn.addEventListener('click', () => {
+        apiKeyInput.value = '';
+        localStorage.removeItem('groq_api_key');
+        modelSubtext.textContent = 'Fallback list — paste a key to load live models';
+        updateCodeView();
+      });
+
+      // Fetch Live Models from Groq
+      async function loadLiveModels(key) {
+        try {
+          const res = await fetch('https://api.groq.com/openai/v1/models', {
+            headers: { 'Authorization': `Bearer ${key}` }
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          const models = (data.data || []).map(m => m.id).filter(id => !/whisper|guard|tts/i.test(id));
+          if (models.length > 0) {
+            modelSelect.innerHTML = '';
+            models.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m;
+              opt.textContent = m;
+              modelSelect.appendChild(opt);
+            });
+            modelSubtext.textContent = `● ${models.length} live models loaded from your Groq account`;
+            modelSubtext.style.color = 'var(--green)';
+          }
+        } catch (e) {
+          console.warn('Could not fetch live models:', e);
+        }
+      }
+
+      // Slider Handlers
+      tempSlider.addEventListener('input', () => {
+        tempVal.textContent = tempSlider.value;
+        updateCodeView();
+      });
+
+      maxTokensSlider.addEventListener('input', () => {
+        maxTokensVal.textContent = maxTokensSlider.value;
+        updateCodeView();
+      });
+
+      stopSequencesInput.addEventListener('input', updateCodeView);
+      webSearchToggle.addEventListener('change', updateCodeView);
+      reasoningToggle.addEventListener('change', updateCodeView);
+      modelSelect.addEventListener('change', updateCodeView);
+
+      // Real-time Prompt Analysis Engine (Matching Newton School LLM Playground)
+      function analyzePrompt(text) {
+        // 1. Detect Input: / Output: pairs
+        const ioRegex = /(?:Input:\s*(.+?)\s*)?Output:\s*([^\n]*)/gi;
+        const matches = [...text.matchAll(ioRegex)];
+        const filledIO = [];
+        let hasTrailingEmpty = false;
+
+        matches.forEach((m, idx) => {
+          const outVal = m[2]?.trim();
+          if (outVal) {
+            filledIO.push(`"Output: ${outVal}"`);
+          } else if (idx === matches.length - 1) {
+            hasTrailingEmpty = true;
+          }
+        });
+
+        // 2. Q: / A: pairs
+        const qaRegex = /Q:\s*(.+?)\s*A:\s*([^\n]+)/gi;
+        const qaMatches = [...text.matchAll(qaRegex)].map(m => m[0]);
+
+        // 3. Arrow pairs
+        const arrowPairs = /(?:.+?)\s*(?:->|=>)\s*(?:.+?)/.test(text);
+
+        // 4. Quoted pairs like "x" -> "y"
+        const quotedPairs = /"[^"]+"\s*(?:->|=>)\s*"[^"]+"/.test(text);
+
+        // 5. Blocks separated by ### or ---
+        const delimitedBlocks = /(?:^|\n)(?:###|---)\s*\n/.test(text);
+
+        // 6. Chain of Thought
+        const cotRegex = /\b(think step by step|reason step by step|let's think|think carefully|explain your reasoning)\b/i;
+        const hasCOT = cotRegex.test(text);
+
+        // 7. Role Prompting
+        const roleRegex = /\b(you are an?|act as an?|your role is|as an expert)\b/i;
+        const hasRole = roleRegex.test(text);
+
+        // 8. Negative Constraints
+        const negRegex = /\b(do not|don't|never|avoid|without using|must not)\b/i;
+        const hasNeg = negRegex.test(text);
+
+        // 9. Format Constraints
+        const fmtRegex = /\b(json|markdown|table|bullet points?|csv|xml|yaml|in \d+ (?:words|sentences))\b/i;
+        const hasFmt = fmtRegex.test(text);
+
+        // Determine Badge
+        const exampleCount = Math.max(filledIO.length, qaMatches.length);
+        let badge = "ZERO-SHOT";
+        if (exampleCount > 0) {
+          badge = `FEW-SHOT (${exampleCount})`;
+        } else if (hasCOT) {
+          badge = "CHAIN-OF-THOUGHT";
+        } else if (hasRole) {
+          badge = "ROLE-BASED";
+        }
+
+        badgeDisplay.textContent = badge;
+
+        // Render Rules List
+        ruleList.innerHTML = `
+          <div class="rule-item ${filledIO.length > 0 ? 'active' : 'inactive'}">
+            <span class="icon">${filledIO.length > 0 ? '✓' : '✕'}</span>
+            <span class="rule-highlight">Input: / Output: pairs with an answer:</span> 
+            ${filledIO.length > 0 ? `${filledIO.length} — ${filledIO.join(', ')}` : 'none found'}
+            ${hasTrailingEmpty ? `<div class="rule-subtext">1 empty Output: ignored — that is the question, not an example.</div>` : ''}
+          </div>
+
+          <div class="rule-item ${qaMatches.length > 0 ? 'active' : 'inactive'}">
+            <span class="icon">${qaMatches.length > 0 ? '✓' : '✕'}</span>
+            <span class="rule-highlight">Q: / A: pairs with an answer:</span> ${qaMatches.length > 0 ? qaMatches.length : 'none found'}
+          </div>
+
+          <div class="rule-item ${arrowPairs ? 'active' : 'inactive'}">
+            <span class="icon">${arrowPairs ? '✓' : '✕'}</span>
+            <span>Lines with text on both sides of -&gt; or =&gt;: ${arrowPairs ? 'detected' : 'none found'}</span>
+          </div>
+
+          <div class="rule-item ${quotedPairs ? 'active' : 'inactive'}">
+            <span class="icon">${quotedPairs ? '✓' : '✕'}</span>
+            <span>Quoted pairs like "x" -&gt; "y": ${quotedPairs ? 'detected' : 'none found'}</span>
+          </div>
+
+          <div class="rule-item ${delimitedBlocks ? 'active' : 'inactive'}">
+            <span class="icon">${delimitedBlocks ? '✓' : '✕'}</span>
+            <span>Blocks separated by ### or ---: ${delimitedBlocks ? 'detected' : 'none found'}</span>
+          </div>
+
+          <div class="rule-item ${hasCOT ? 'active' : 'inactive'}">
+            <span class="icon">${hasCOT ? '✓' : '✕'}</span>
+            <span>Chain-of-Thought: ${hasCOT ? 'detected' : 'not detected'}</span>
+          </div>
+
+          <div class="rule-item ${hasRole ? 'active' : 'inactive'}">
+            <span class="icon">${hasRole ? '✓' : '✕'}</span>
+            <span>Role prompting: ${hasRole ? 'detected' : 'not detected'}</span>
+          </div>
+
+          <div class="rule-item ${hasNeg ? 'active' : 'inactive'}">
+            <span class="icon">${hasNeg ? '✓' : '✕'}</span>
+            <span>Negative constraint: ${hasNeg ? 'detected' : 'not detected'}</span>
+          </div>
+
+          <div class="rule-item ${hasFmt ? 'active' : 'inactive'}">
+            <span class="icon">${hasFmt ? '✓' : '✕'}</span>
+            <span>Format constraint: ${hasFmt ? 'detected' : 'not detected'}</span>
+          </div>
+        `;
+      }
+
+      promptTextarea.addEventListener('input', () => {
+        analyzePrompt(promptTextarea.value);
+        updateCodeView();
+      });
+
+      // Run initial analysis on placeholder
+      analyzePrompt(promptTextarea.value);
+
+      // Keyboard shortcut: Cmd/Ctrl+Enter
+      promptTextarea.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          e.preventDefault();
+          if (!isGenerating) executePrompt();
+        } else if (e.key === 'Escape' && isGenerating) {
+          if (abortController) abortController.abort();
+        }
+      });
+
+      submitBtn.addEventListener('click', () => {
+        if (isGenerating) {
+          if (abortController) abortController.abort();
+        } else {
+          executePrompt();
+        }
+      });
+
+      // Live Web Search Context Fetcher (Grounding)
+      async function fetchWebContext(query) {
+        try {
+          const searchUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+          const res = await fetch(searchUrl);
+          const data = await res.json();
+          let summary = data.AbstractText || '';
+          if (!summary && data.RelatedTopics && data.RelatedTopics.length > 0) {
+            summary = data.RelatedTopics.slice(0, 3).map(t => t.Text).filter(Boolean).join(' ');
+          }
+          return summary ? `[Live Web Search Context for "${query}"]: ${summary}` : null;
+        } catch {
+          return null;
+        }
+      }
+
+      // Groq Inference Streaming Execution
+      async function executePrompt() {
+        const key = apiKeyInput.value.trim();
+        if (!key) {
+          alert('Please enter your Groq API key in the left sidebar.');
+          apiKeyInput.focus();
+          return;
+        }
+
+        const prompt = promptTextarea.value.trim();
+        if (!prompt) {
+          alert('Please write a prompt.');
+          promptTextarea.focus();
+          return;
+        }
+
+        isGenerating = true;
+        abortController = new AbortController();
+        submitBtn.innerHTML = '<span>Stop (Esc)</span>';
+        submitBtn.style.background = 'var(--border-focus)';
+        responseCard.classList.remove('placeholder');
+        responseCard.innerHTML = `<div class="response-header"><span>Streaming Groq LPU Response...</span><span id="streamingTokenLive">0 tokens</span></div><div id="streamContent"></div>`;
+
+        const streamContent = document.getElementById('streamContent');
+        const streamingTokenLive = document.getElementById('streamingTokenLive');
+
+        // Reset Telemetry
+        ttftVal.textContent = '...';
+        totalSecVal.textContent = '...';
+        tpsVal.textContent = '...';
+
+        const startTime = performance.now();
+        let firstTokenTime = null;
+        let tokenCount = 0;
+
+        try {
+          let messages = [{ role: 'user', content: prompt }];
+
+          // Web Search Injection
+          if (webSearchToggle.checked) {
+            const firstLine = prompt.split('\n')[0].replace(/^(input:|q:)/i, '').trim();
+            const searchContext = await fetchWebContext(firstLine);
+            if (searchContext) {
+              responseCard.insertAdjacentHTML('afterbegin', `<div class="search-alert-pill">🌐 Web Grounding: Retrieved live facts for "${firstLine}"</div>`);
+              messages = [
+                { role: 'system', content: `You have access to live facts:\n${searchContext}\nGround your response in this context.` },
+                { role: 'user', content: prompt }
+              ];
+            }
+          }
+
+          const stopSeqVal = stopSequencesInput.value.trim();
+          const stop = stopSeqVal ? stopSeqVal.split(',').map(s => s.trim()).filter(Boolean) : undefined;
+
+          const requestBody = {
+            model: modelSelect.value,
+            messages,
+            temperature: parseFloat(tempSlider.value),
+            max_completion_tokens: parseInt(maxTokensSlider.value, 10),
+            stream: true,
+            stop
+          };
+
+          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${key}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody),
+            signal: abortController.signal
+          });
+
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const clean = line.trim();
+              if (!clean.startsWith('data:')) continue;
+              const jsonStr = clean.replace(/^data:\s*/, '');
+              if (jsonStr === '[DONE]') continue;
+
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const delta = parsed.choices?.[0]?.delta?.content;
+                if (delta) {
+                  if (!firstTokenTime) {
+                    firstTokenTime = performance.now();
+                    const ttftMs = Math.round(firstTokenTime - startTime);
+                    ttftVal.textContent = ttftMs;
+                  }
+
+                  tokenCount++;
+                  streamContent.textContent += delta;
+                  streamingTokenLive.textContent = `${tokenCount} tokens`;
+
+                  // Feed into 3D Particle Visualizer
+                  addTokenParticle(delta, tokenCount);
+                }
+              } catch {
+                // partial JSON chunk
+              }
+            }
+          }
+
+          // Completed Telemetry Calculation
+          const endTime = performance.now();
+          const totalDurationSec = (endTime - startTime) / 1000;
+          totalSecVal.textContent = totalDurationSec.toFixed(2);
+
+          const genDurationSec = firstTokenTime ? (endTime - firstTokenTime) / 1000 : totalDurationSec;
+          const tokensPerSec = genDurationSec > 0 ? Math.round(tokenCount / genDurationSec) : 0;
+          tpsVal.textContent = tokensPerSec > 0 ? tokensPerSec : '—';
+
+          // Update Particle Velocity in 3D HUD
+          document.getElementById('particleVelocity').textContent = `${tokensPerSec} tok/s`;
+
+        } catch (error) {
+          if (error.name === 'AbortError') {
+            streamContent.textContent += '\n\n[Inference stopped by user]';
+          } else {
+            streamContent.innerHTML = `<span style="color: var(--red);">Error: ${error.message}</span>`;
+          }
+        } finally {
+          isGenerating = false;
+          submitBtn.innerHTML = '<span>Submit</span>';
+          submitBtn.style.background = 'var(--groq-orange)';
+        }
+      }
+
+      // View Switcher Tabs
+      const viewButtons = document.querySelectorAll('.view-tab-btn');
+      const editorView = document.getElementById('editorView');
+      const visualizerView = document.getElementById('visualizerView');
+      const codeView = document.getElementById('codeView');
+
+      viewButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          viewButtons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          const view = btn.dataset.view;
+          editorView.classList.toggle('hidden', view !== 'editor');
+          visualizerView.classList.toggle('hidden', view !== 'visualizer');
+          codeView.classList.toggle('hidden', view !== 'code');
+
+          if (view === 'visualizer') {
+            resizeThreeCanvas();
+          } else if (view === 'code') {
+            updateCodeView();
+          }
+        });
+      });
+
+      // Code View Generator
+      function updateCodeView() {
+        const model = modelSelect.value;
+        const temp = parseFloat(tempSlider.value);
+        const maxTokens = parseInt(maxTokensSlider.value, 10);
+        const prompt = promptTextarea.value.trim() || 'Your prompt here';
+        const key = apiKeyInput.value.trim() || 'YOUR_GROQ_API_KEY';
+
+        let code = '';
+        if (currentCodeLang === 'python') {
+          code = `from groq import Groq
+
+client = Groq(api_key="${key}")
+
+completion = client.chat.completions.create(
+    model="${model}",
+    messages=[
+        {"role": "user", "content": ${JSON.stringify(prompt)}}
+    ],
+    temperature=${temp},
+    max_completion_tokens=${maxTokens},
+    stream=True
+)
+
+for chunk in completion:
+    print(chunk.choices[0].delta.content or "", end="")`;
+        } else if (currentCodeLang === 'js') {
+          code = `import Groq from "groq-sdk";
+
+const groq = new Groq({ apiKey: "${key}", dangerouslyAllowBrowser: true });
+
+async function main() {
+  const stream = await groq.chat.completions.create({
+    model: "${model}",
+    messages: [{ role: "user", content: ${JSON.stringify(prompt)} }],
+    temperature: ${temp},
+    max_completion_tokens: ${maxTokens},
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    process.stdout.write(chunk.choices[0]?.delta?.content || "");
+  }
+}
+
+main();`;
+        } else {
+          code = `curl https://api.groq.com/openai/v1/chat/completions \\
+  -H "Authorization: Bearer ${key}" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${model}",
+    "messages": [{"role": "user", "content": ${JSON.stringify(prompt)}}],
+    "temperature": ${temp},
+    "max_completion_tokens": ${maxTokens},
+    "stream": true
+  }'`;
+        }
+        codeBoxContent.textContent = code;
+      }
+
+      document.querySelectorAll('.code-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.code-tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentCodeLang = btn.dataset.lang;
+          updateCodeView();
+        });
+      });
+
+      document.getElementById('viewCodeModalBtn').addEventListener('click', () => {
+        document.querySelector('[data-view="code"]').click();
+      });
+
+      // ==========================================
+      // 🌌 3D Three.js Particle Universe Engine
+      // ==========================================
+      const canvas = document.getElementById('threeCanvas');
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x06070a, 0.03);
+
+      const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+      camera.position.set(0, 0, 14);
+
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      // Central Groq LPU Core Mesh
+      const coreGeometry = new THREE.IcosahedronGeometry(1.8, 2);
+      const coreMaterial = new THREE.MeshBasicMaterial({
+        color: 0xf55036,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.35
+      });
+      const coreMesh = new THREE.Mesh(coreGeometry, coreMaterial);
+      scene.add(coreMesh);
+
+      // Particle Buffer Ring
+      const MAX_PARTICLES = 3000;
+      const positions = new Float32Array(MAX_PARTICLES * 3);
+      const colors = new Float32Array(MAX_PARTICLES * 3);
+      let particleIndex = 0;
+
+      // Initialize all particle positions to core center
+      for (let i = 0; i < MAX_PARTICLES * 3; i++) {
+        positions[i] = 0;
+        colors[i] = 0;
+      }
+
+      const particleGeometry = new THREE.BufferGeometry();
+      particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+      // Circular Point Texture
+      const getCircleTexture = () => {
+        const c = document.createElement('canvas');
+        c.width = 64; c.height = 64;
+        const ctx = c.getContext('2d');
+        const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        grad.addColorStop(0, 'rgba(255,255,255,1)');
+        grad.addColorStop(0.3, 'rgba(245,80,54,0.8)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 64, 64);
+        return new THREE.CanvasTexture(c);
+      };
+
+      const particleMaterial = new THREE.PointsMaterial({
+        size: 0.6,
+        vertexColors: true,
+        map: getCircleTexture(),
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      const particlePoints = new THREE.Points(particleGeometry, particleMaterial);
+      scene.add(particlePoints);
+
+      function addTokenParticle(tokenText, tokenNum) {
+        const i = (particleIndex % MAX_PARTICLES);
+        
+        // Spawn around a dynamic sphere
+        const phi = Math.acos(-1 + (2 * i) / MAX_PARTICLES);
+        const theta = Math.sqrt(MAX_PARTICLES * Math.PI) * phi;
+        const r = 4.5 + Math.random() * 2.0;
+
+        positions[i * 3 + 0] = r * Math.cos(theta) * Math.sin(phi);
+        positions[i * 3 + 1] = r * Math.sin(theta) * Math.sin(phi);
+        positions[i * 3 + 2] = r * Math.cos(phi);
+
+        // Color coding: Groq orange (#F55036) with Cyan flashes
+        if (tokenNum % 7 === 0) {
+          colors[i * 3 + 0] = 0.0; // Cyan
+          colors[i * 3 + 1] = 0.9;
+          colors[i * 3 + 2] = 1.0;
+        } else {
+          colors[i * 3 + 0] = 0.96; // Groq Orange
+          colors[i * 3 + 1] = 0.31;
+          colors[i * 3 + 2] = 0.21;
+        }
+
+        particleIndex++;
+        particleGeometry.attributes.position.needsUpdate = true;
+        particleGeometry.attributes.color.needsUpdate = true;
+
+        document.getElementById('particleTokenCount').textContent = particleIndex;
+      }
+
+      function resizeThreeCanvas() {
+        const rect = visualizerView.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          camera.aspect = rect.width / rect.height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(rect.width, rect.height);
+        }
+      }
+
+      window.addEventListener('resize', resizeThreeCanvas);
+
+      // Render Loop
+      function animate() {
+        requestAnimationFrame(animate);
+        coreMesh.rotation.y += 0.005;
+        coreMesh.rotation.x += 0.003;
+        particlePoints.rotation.y += 0.002;
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+    })();
+  </script>
+</body>
+</html>
